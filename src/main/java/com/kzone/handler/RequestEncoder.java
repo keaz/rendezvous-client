@@ -1,6 +1,6 @@
-package com.kzone.p2p.handler;
+package com.kzone.handler;
 
-import com.kzone.p2p.event.ClientJoined;
+import com.kzone.client.event.ClientJoined;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.MessageToByteEncoder;

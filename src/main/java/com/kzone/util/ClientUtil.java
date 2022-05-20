@@ -1,4 +1,4 @@
-package com.kzone.p2p.util;
+package com.kzone.util;
 
 import lombok.experimental.UtilityClass;
 
@@ -14,7 +14,7 @@ public class ClientUtil {
 
     private static final UUID clientId = UUID.randomUUID();
 
-    public String getMac() {
+    public static String getMac() {
         try {
             for (NetworkInterface ni : Collections.list(NetworkInterface.getNetworkInterfaces())) {
                 byte[] adr = ni.getHardwareAddress();
@@ -31,11 +31,11 @@ public class ClientUtil {
         throw new RuntimeException("Mac not found");
     }
 
-    public long getPId(){
+    public static long getPId(){
         return ProcessHandle.current().pid();
     }
 
-    public String getHostName()  {
+    public static String getHostName()  {
         try {
             return InetAddress.getLocalHost().getHostName();
         } catch (UnknownHostException e) {
@@ -43,7 +43,7 @@ public class ClientUtil {
         }
     }
 
-    public String getClientName(){
+    public static String getClientName(){
         return getHostName() +"-"+getPId();
     }
 

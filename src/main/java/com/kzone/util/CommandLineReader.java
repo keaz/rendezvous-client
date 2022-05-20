@@ -1,18 +1,15 @@
-package com.kzone.p2p.util;
+package com.kzone.util;
 
+import com.kzone.App;
 import com.kzone.p2p.event.Message;
-import com.kzone.p2p.message.MessageHolder;
-import lombok.RequiredArgsConstructor;
+import com.kzone.message.MessageHolder;
 import lombok.extern.log4j.Log4j2;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 
-@RequiredArgsConstructor
 @Log4j2
-public class CommandLineReader implements Runnable {
-
-    private final MessageHolder messageHolder;
+public record CommandLineReader(MessageHolder messageHolder) implements Runnable {
 
     public void run() {
         BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
@@ -21,7 +18,7 @@ public class CommandLineReader implements Runnable {
             String str;
             do {
                 str = reader.readLine();
-                messageHolder.putMessage(new Message(ClientUtil.getClientId(),str));
+                messageHolder.putMessage(new Message(ClientUtil.getMac() + ":" + App.PEER_SERVER_PORT, str));
             }
             while (str != null);
 

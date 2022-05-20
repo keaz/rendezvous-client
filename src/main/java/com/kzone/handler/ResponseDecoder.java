@@ -1,7 +1,7 @@
-package com.kzone.p2p.handler;
+package com.kzone.handler;
 
-import com.kzone.p2p.event.ClientJoined;
-import com.kzone.p2p.event.ClientLeft;
+import com.kzone.client.event.ClientJoined;
+import com.kzone.client.event.ClientLeft;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.ByteToMessageDecoder;
@@ -26,21 +26,21 @@ public class ResponseDecoder extends ByteToMessageDecoder {
             ois = new ObjectInputStream(new ByteArrayInputStream(bytes));
         }
         final var not = (Serializable) ois.readObject();
-        log.debug("Got Notification {}", not);
+        log.debug("Got ClientEvent {}", not);
         if (not instanceof List notifications) {
 
-            log.info("Client notification {}", notifications);
+            log.info("App notification {}", notifications);
             list.addAll(notifications);
             return;
         }
 
         list.add(not);
         if (not instanceof ClientJoined notification) {
-            log.info("Got new client join event {}", notification.clientId());
+            log.info("Got new client join event {}", notification.id());
         }
 
         if (not instanceof ClientLeft removed) {
-            log.info("Client removed {}", removed.clientId());
+            log.info("App removed {}", removed.id());
         }
     }
 
