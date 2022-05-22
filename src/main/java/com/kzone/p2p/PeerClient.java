@@ -16,6 +16,9 @@ import java.net.UnknownHostException;
 import java.util.LinkedList;
 import java.util.List;
 
+import static com.kzone.App.localPort;
+import static com.kzone.App.peerServerStarted;
+
 @Log4j2
 public record PeerClient(Bootstrap bootstrap, NioEventLoopGroup group, ChannelInboundHandlerAdapter decoder,
                          ChannelOutboundHandlerAdapter encoder, PeerClientHandler clientHandler) {
@@ -46,6 +49,13 @@ public record PeerClient(Bootstrap bootstrap, NioEventLoopGroup group, ChannelIn
 
         CLIENT_INFO_LIST.addAll(clientInfoList);
 
+        while(!peerServerStarted){
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
         for (ClientInfo clientInfo : clientInfoList) {
 //            if(SESSION_HOLDER.isPeerExists(clientInfo.host(),clientInfo.port())){
 //                log.warn("Peer already exists with host:{} port:{}",clientInfo.host(),clientInfo.port());

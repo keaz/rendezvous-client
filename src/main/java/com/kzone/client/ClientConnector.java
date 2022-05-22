@@ -16,9 +16,16 @@ import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.serialization.ClassResolvers;
 import io.netty.handler.codec.serialization.ObjectDecoder;
 import io.netty.handler.codec.serialization.ObjectEncoder;
+import lombok.extern.log4j.Log4j2;
 
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.SocketAddress;
 import java.util.UUID;
 
+import static com.kzone.App.localPort;
+
+@Log4j2
 public record ClientConnector(String host, int port, ClientHandler clientHandler) implements Runnable {
 
     @Override
@@ -29,6 +36,7 @@ public record ClientConnector(String host, int port, ClientHandler clientHandler
             bootstrap.group(group) // Set EventLoopGroup to handle all events for client.
                     .channel(NioSocketChannel.class)// Use NIO to accept new connections.
                     .option(ChannelOption.SO_KEEPALIVE, true)
+                    .option(ChannelOption.SO_REUSEADDR, true)
                     .handler(new ChannelInitializer<SocketChannel>() {
                         @Override
                         public void initChannel(SocketChannel ch) throws Exception {
@@ -50,7 +58,9 @@ public record ClientConnector(String host, int port, ClientHandler clientHandler
             Channel channel = channelFuture.sync().channel();
             channel.writeAndFlush(notification);
             channel.flush();
-
+            log.info("Client connector remote address {}" ,channel.remoteAddress());
+            log.info("Client connector remote address {}" ,channel.localAddress());
+            localPort = ((InetSocketAddress)channel.localAddress()).getPort();
             // Wait until the connection is closed.
             channelFuture.channel().closeFuture().sync();
         } catch (InterruptedException exception) {

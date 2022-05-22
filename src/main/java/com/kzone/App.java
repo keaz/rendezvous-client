@@ -28,6 +28,10 @@ public class App {
     static final String HOST = System.getenv("SERVER_HOST") == null ? "host.docker.internal" : System.getenv("SERVER_HOST");
     static final int PORT = 8007;
 
+    public static int localPort = -1;
+
+    public static boolean peerServerStarted = false;
+
     static {
         try {
             HOST_NAME = InetAddress.getLocalHost().toString();
@@ -36,17 +40,20 @@ public class App {
         }
     }
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws InterruptedException {
 
         var messageHolder = new MessageHolder();
         var objectMapper = new ObjectMapper();
         final var peerClient = new PeerClient(new Bootstrap(), new NioEventLoopGroup(), new JsonDecoder(objectMapper), new JsonEncoder(objectMapper), new PeerClientHandler());
         peerClient.init();
-        new Thread(new PeerServer(PEER_SERVER_PORT, new JsonDecoder(objectMapper), new JsonEncoder(objectMapper), new PeerServerHandler())).start();
         new Thread(new CommandLineReader(messageHolder)).start();
         log.info("Connecting to server {}", HOST);
         new Thread(new ClientConnector(HOST, PORT, new ClientHandler(peerClient))).start();
         new Thread(new Sender(messageHolder)).start();
+        while(localPort == -1){
+            Thread.sleep(1000);
+        }
+        new Thread(new PeerServer(localPort, new JsonDecoder(objectMapper), new JsonEncoder(objectMapper), new PeerServerHandler())).start();
     }
 
 }

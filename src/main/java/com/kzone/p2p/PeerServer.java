@@ -9,6 +9,8 @@ import lombok.extern.log4j.Log4j2;
 
 import java.net.InetSocketAddress;
 
+import static com.kzone.App.peerServerStarted;
+
 @Log4j2
 public record PeerServer(int port, ChannelInboundHandlerAdapter decoder,
                          ChannelOutboundHandlerAdapter encoder, PeerServerHandler clientHandler) implements Runnable {
@@ -32,12 +34,15 @@ public record PeerServer(int port, ChannelInboundHandlerAdapter decoder,
                 }
             });
             bootstrap.option(ChannelOption.SO_BACKLOG, 128);
+            bootstrap.option(ChannelOption.SO_REUSEADDR, true);
+            bootstrap.childOption(ChannelOption.SO_REUSEADDR, true);
             bootstrap.childOption(ChannelOption.SO_KEEPALIVE, true);
 
             // Start the server.
             var channel = bootstrap.bind(port).sync();
-            log.debug("Peer Server started.");
+            log.info("Peer Server started.");
             // Wait until the server socket is closed.
+            peerServerStarted = true;
             channel.channel().closeFuture().sync();
         } catch (InterruptedException e) {
             log.error("Peer Server thread interrupted ", e);
