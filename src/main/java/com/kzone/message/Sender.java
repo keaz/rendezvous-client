@@ -19,6 +19,7 @@ public class Sender implements Runnable {
     @Override
     public void run() {
         while (isRunning) {
+            log.info("Reading messages from  message holder");
             final var peerEvent = messageHolder.readMessage();
             final var peers = peersSessionHolder.getPeers();
             for (Peer peer : peers) {
@@ -26,8 +27,9 @@ public class Sender implements Runnable {
 
                 if(!channel.isOpen()){
                     isRunning = false;
-                    break;
+                    continue;
                 }
+                log.info("Sending {} to peer {}",peerEvent,peer.host());
                 channel.writeAndFlush(peerEvent);
                 channel.flush();
             }

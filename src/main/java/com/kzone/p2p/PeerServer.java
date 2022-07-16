@@ -1,17 +1,21 @@
 package com.kzone.p2p;
 
+import com.kzone.p2p.handler.PeerServerHandler;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 
-import java.net.InetSocketAddress;
-
 @Log4j2
-public record PeerServer(int port, ChannelInboundHandlerAdapter decoder,
-                         ChannelOutboundHandlerAdapter encoder, PeerServerHandler clientHandler) implements Runnable {
+@RequiredArgsConstructor
+public class PeerServer implements Runnable {
+    private final int port;
+    private final ChannelInboundHandlerAdapter decoder;
+    private final ChannelOutboundHandlerAdapter encoder;
+    private final PeerServerHandler clientHandler;
 
     @Override
     public void run() {

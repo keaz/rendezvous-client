@@ -3,6 +3,7 @@ package com.kzone.p2p;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kzone.client.event.ClientEvent;
 import com.kzone.p2p.event.Message;
+import com.kzone.p2p.event.PeerEvent;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufUtil;
 import io.netty.channel.ChannelHandler;
@@ -22,12 +23,12 @@ import java.util.List;
 @RequiredArgsConstructor
 @Log4j2
 @ChannelHandler.Sharable
-public class JsonEncoder extends MessageToMessageEncoder<Message> {
+public class JsonEncoder extends MessageToMessageEncoder<Object> {
 
     private final ObjectMapper objectMapper;
 
     @Override
-    protected void encode(ChannelHandlerContext ctx, Message msg, List<Object> out) throws Exception {
+    protected void encode(ChannelHandlerContext ctx, Object msg, List<Object> out) throws Exception {
         final var messageString = objectMapper.writeValueAsString(msg);
 
         out.add(ByteBufUtil.encodeString(ctx.alloc(), CharBuffer.wrap(messageString), Charset.defaultCharset()));
