@@ -13,12 +13,12 @@ import java.util.concurrent.locks.ReentrantLock;
 @Log4j2
 public class MessageHolder {
 
-    public static final Queue<PeerEvent> MESSAGES = new ConcurrentLinkedQueue<>();
+    public static final Queue<Object> MESSAGES = new ConcurrentLinkedQueue<>();
     private final Lock lock = new ReentrantLock();
     private final Condition isEmpty = lock.newCondition();
     private final Condition hasElement = lock.newCondition();
 
-    public void putMessage(PeerEvent clientEvent) {
+    public void putMessage(Object clientEvent) {
         try {
             lock.lock();
             MESSAGES.add(clientEvent);
@@ -28,7 +28,7 @@ public class MessageHolder {
         }
     }
 
-    public PeerEvent readMessage() {
+    public Object readMessage() {
         try {
             lock.lock();
             while (MESSAGES.isEmpty()) {

@@ -2,6 +2,7 @@ package com.kzone.p2p.command;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
+import com.kzone.file.Folder;
 
 import java.io.Serializable;
 import java.util.List;

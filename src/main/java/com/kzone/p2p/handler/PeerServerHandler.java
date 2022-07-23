@@ -47,7 +47,9 @@ public class PeerServerHandler extends ChannelInboundHandlerAdapter {
         PeersSessionHolder.getPeersSessionHolder().addPeer(socketAddress.getAddress().getHostAddress(), socketAddress.getPort(), channel);
 
         final var folderHierarchy = FileUtil.getFolderHierarchy(Paths.get(App.DIRECTORY));
-        channel.writeAndFlush(new CreateFolderCommand(UUID.randomUUID(), folderHierarchy));
+        folderHierarchy.forEach(folders -> {
+            channel.writeAndFlush(new CreateFolderCommand(UUID.randomUUID(), folders));
+        });
 
         channels.add(channel);
     }

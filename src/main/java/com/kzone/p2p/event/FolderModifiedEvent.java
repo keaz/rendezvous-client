@@ -7,6 +7,6 @@ import java.util.UUID;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonTypeInfo(use = JsonTypeInfo.Id.CLASS, property = "@type")
-public record FolderModifiedEvent(String peerHost, UUID id) implements PeerEvent {
+public record FolderModifiedEvent(String peerHost, UUID id) {
 
 }

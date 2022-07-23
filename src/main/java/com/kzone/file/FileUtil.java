@@ -1,10 +1,12 @@
 package com.kzone.file;
 
-import com.kzone.p2p.command.Folder;
 import lombok.experimental.UtilityClass;
 import lombok.extern.log4j.Log4j2;
 
-import java.io.*;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -15,18 +17,13 @@ import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipOutputStream;
+import java.util.stream.IntStream;
 
 @Log4j2
 @UtilityClass
 public class FileUtil {
 
     public static String getFileChecksum(File file) {
-
-        if (file.isDirectory()) {
-            return getDigestForDirectory(file);
-        }
 
         MessageDigest digest = getMessageDigest();
         try (InputStream fis = new FileInputStream(file)) {
@@ -55,7 +52,6 @@ public class FileUtil {
         return sb.toString();
     }
 
-
     private MessageDigest getMessageDigest() {
         try {
             return MessageDigest.getInstance("SHA-1");
@@ -64,38 +60,17 @@ public class FileUtil {
         }
     }
 
-    private String getDigestForDirectory(File file) {
-        try (final var outputStream = new ByteArrayOutputStream();
-             ZipOutputStream zipOut = new ZipOutputStream(outputStream);
-             FileInputStream fis = new FileInputStream(file)) {
-
-            ZipEntry zipEntry = new ZipEntry(file.getName());
-            zipOut.putNextEntry(zipEntry);
-            byte[] bytes = new byte[1024];
-            int length;
-            while ((length = fis.read(bytes)) >= 0) {
-                zipOut.write(bytes, 0, length);
-            }
-            final var messageDigest = getMessageDigest();
-            messageDigest.digest(outputStream.toByteArray());
-            return getSHAString(messageDigest);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-
-    public static List<Folder> getFolderHierarchy(Path root) {
+    public static List<List<Folder>> getFolderHierarchy(Path root) {
         var folders = new ArrayList<Folder>(0);
         try {
             Files.walkFileTree(root, new SimpleFileVisitor<>() {
                 @Override
                 public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
                     log.debug("Visiting directory {}", dir);
-                    if (Files.isDirectory(dir)) {
+                    if (Files.isDirectory(dir) && !Files.isSameFile(root, dir)) {
                         final var resolve = root.resolve(dir);
                         final var relativize = root.relativize(resolve);
-                        folders.add(new Folder(relativize.toString(),null, Collections.emptyList()));
+                        folders.add(new Folder(relativize.toString()));
                     }
                     return FileVisitResult.CONTINUE;
                 }
@@ -103,7 +78,43 @@ public class FileUtil {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
-        return folders;
+
+        var partitionSize = 20;
+        var size = folders.size();
+
+        if (size > partitionSize) {
+            var fullChunks = (size - 1) / partitionSize;
+            return IntStream.range(0, fullChunks + 1).mapToObj(value ->
+                    (List<Folder>) new ArrayList<>(folders.subList(value * partitionSize, value == fullChunks ? size : (value + 1) * partitionSize))).toList();
+        }
+
+        return Collections.singletonList(folders);
+    }
+
+    public static List<FileMetadata> getFileMetadata(Path root) {
+        var files = new ArrayList<FileMetadata>(0);
+        try {
+            Files.walkFileTree(root, new SimpleFileVisitor<>() {
+                @Override
+                public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
+                    log.debug("Visiting directory {}", dir);
+                    if (Files.isDirectory(dir)) {
+                        try (var stream = Files.list(dir)) {
+                            stream.filter(Files::isRegularFile)
+                                    .map(path -> {
+                                        final var resolve = root.resolve(path);
+                                        final var relativize = root.relativize(resolve);
+                                        return new FileMetadata(relativize.toString(), FileUtil.getFileChecksum(path.toFile()));
+                                    }).forEach(files::add);
+                        }
+                    }
+                    return FileVisitResult.CONTINUE;
+                }
+            });
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        return files;
     }
 
 }

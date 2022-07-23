@@ -8,5 +8,5 @@ import java.util.UUID;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonTypeInfo(use = JsonTypeInfo.Id.CLASS, property = "@type")
-public record ReadyToUploadCommand(String peerHost, UUID id, String fileName, String directory, long fileSize) implements PeerEvent {
+public record ReadyToUploadCommand(String peerHost, UUID id, String fileName, String directory, long fileSize) {
 }

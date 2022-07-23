@@ -1,7 +1,7 @@
 package com.kzone.p2p.handler;
 
 import com.kzone.App;
-import com.kzone.p2p.event.FileDownloaded;
+import com.kzone.p2p.event.FileDownloadedEvent;
 import com.kzone.util.ClientUtil;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
@@ -59,7 +59,7 @@ public class FilesInboundHandler extends ChannelInboundHandlerAdapter {
             ctx.pipeline().addLast(App.JSON_ENCODER);
             ctx.pipeline().addLast(parentAdapter);
 
-            ctx.writeAndFlush(new FileDownloaded(ClientUtil.getClientName(), id));
+            ctx.writeAndFlush(new FileDownloadedEvent(ClientUtil.getClientName(), id));
         }
     }
 

@@ -1,9 +1,6 @@
 package com.kzone.util;
 
-import com.kzone.App;
-import com.kzone.p2p.command.Folder;
-import com.kzone.p2p.command.ModifyFolderCommand;
-import com.kzone.p2p.event.Message;
+import com.kzone.file.Folder;
 import com.kzone.message.MessageHolder;
 import lombok.extern.log4j.Log4j2;
 
@@ -20,7 +17,7 @@ public record CommandLineReader(MessageHolder messageHolder) implements Runnable
         BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
         final var folders = new ArrayList<Folder>();
         final var uuid = UUID.randomUUID();
-        folders.add(new Folder(uuid.toString(), "asd",Collections.emptyList()));
+//        folders.add(new Folder(uuid.toString(), "asd",Collections.emptyList()));
 //        final var modifyFolderCommand = new ModifyFolderCommand(ClientUtil.getClientName(), UUID.randomUUID(), folders);
 //        messageHolder.putMessage(modifyFolderCommand);
         try {
@@ -28,7 +25,7 @@ public record CommandLineReader(MessageHolder messageHolder) implements Runnable
             String str;
             do {
                 str = reader.readLine();
-                messageHolder.putMessage(new Message(ClientUtil.getMac() + ":" + App.PEER_SERVER_PORT, str));
+//                messageHolder.putMessage(new Message(ClientUtil.getMac() + ":" + App.PEER_SERVER_PORT, str));
             }
             while (str != null);
 

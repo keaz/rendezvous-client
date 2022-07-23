@@ -1,12 +1,16 @@
 package com.kzone.file;
 
+import com.kzone.App;
+import com.kzone.p2p.command.CreateFolderCommand;
 import lombok.extern.log4j.Log4j2;
 
 import java.io.IOException;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 
 import static java.nio.file.LinkOption.NOFOLLOW_LINKS;
 import static java.nio.file.StandardWatchEventKinds.*;
@@ -116,13 +120,16 @@ public class WatchDir implements Runnable {
 
                 // print out event
                 log.info("{}: {}", event.kind().name(), rootRelative);
-                log.info("Checksum {} for {} ", FileUtil.getFileChecksum(rootRelative.toFile()), rootRelative);
-
+                if(rootRelative.toFile().isFile()) {
+                    log.info("Checksum {} for {} ", FileUtil.getFileChecksum(rootRelative.toFile()), rootRelative);
+                }
                 // if directory is created, and watching recursively, then
                 // register it and its sub-directories
                 if (kind == ENTRY_CREATE) {
+
                     try {
                         if (Files.isDirectory(child, NOFOLLOW_LINKS)) {
+                            App.MESSAGE_HOLDER.putMessage(new CreateFolderCommand(UUID.randomUUID(), Collections.singletonList(new Folder(rootRelative.toString()))));
                             registerAll(child);
                         }
                     } catch (IOException x) {

@@ -6,6 +6,8 @@ import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
+import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
+import io.netty.handler.codec.LengthFieldPrepender;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 
@@ -29,10 +31,13 @@ public class PeerServer implements Runnable {
             bootstrap.childHandler(new ChannelInitializer<SocketChannel>() {
                 @Override
                 public void initChannel(SocketChannel ch) throws Exception {
-                    ChannelPipeline p = ch.pipeline();
-                    p.addLast("peer-decoder", decoder);
-                    p.addLast("peer-encoder", encoder);
-                    p.addLast("peer-handler", clientHandler);
+                    ChannelPipeline pipeline = ch.pipeline();
+                    pipeline.addLast("frameDecoder",
+                            new LengthFieldBasedFrameDecoder(1048576, 0, 4, 0, 4));
+                    pipeline.addLast("peer-decoder", decoder);
+                    pipeline.addLast("frameEncoder", new LengthFieldPrepender(4));
+                    pipeline.addLast("peer-encoder", encoder);
+                    pipeline.addLast("peer-handler", clientHandler);
                 }
             });
             bootstrap.option(ChannelOption.SO_BACKLOG, 128);

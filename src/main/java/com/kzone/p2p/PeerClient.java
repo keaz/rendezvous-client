@@ -4,19 +4,16 @@ import com.kzone.App;
 import com.kzone.client.event.ClientInfo;
 import com.kzone.file.FileUtil;
 import com.kzone.p2p.command.CreateFolderCommand;
-import com.kzone.p2p.command.Folder;
-import com.kzone.p2p.event.Message;
 import com.kzone.p2p.handler.PeerClientHandler;
-import com.kzone.util.ClientUtil;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
+import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
+import io.netty.handler.codec.LengthFieldPrepender;
 import lombok.extern.log4j.Log4j2;
 
-import java.net.InetAddress;
-import java.net.UnknownHostException;
 import java.nio.file.Paths;
 import java.util.LinkedList;
 import java.util.List;
@@ -40,7 +37,10 @@ public record PeerClient(Bootstrap bootstrap, NioEventLoopGroup group, ChannelIn
             public void initChannel(SocketChannel ch) throws Exception {
                 ChannelPipeline pipeline = ch.pipeline();
 //                            pipeline.addLast(new LoggingHandler(LogLevel.INFO));
+                pipeline.addLast("frameDecoder",
+                        new LengthFieldBasedFrameDecoder(1048576, 0, 4, 0, 4));
                 pipeline.addLast(decoder);
+                pipeline.addLast("frameEncoder", new LengthFieldPrepender(4));
                 pipeline.addLast(encoder);
                 pipeline.addLast(clientHandler);
 
@@ -61,7 +61,9 @@ public record PeerClient(Bootstrap bootstrap, NioEventLoopGroup group, ChannelIn
                 SESSION_HOLDER.addPeer(clientInfo.address(), clientInfo.port(), channel);
                 final var folderHierarchy = FileUtil.getFolderHierarchy(Paths.get(App.DIRECTORY));
                 log.debug("******** Peer Sending file hierarchy {}", folderHierarchy);
-                channel.writeAndFlush(new CreateFolderCommand(UUID.randomUUID(), folderHierarchy));
+                folderHierarchy.forEach(folders -> {
+                    channel.writeAndFlush(new CreateFolderCommand(UUID.randomUUID(), folders));
+                });
 //                channel.writeAndFlush(message);
             } catch (InterruptedException e) {
                 log.error("Error connecting to peer serve", e);
