@@ -1,6 +1,7 @@
 package com.kzone.p2p.handler;
 
 import com.kzone.App;
+import com.kzone.file.FileMetadataMaintainer;
 import com.kzone.file.FolderService;
 import com.kzone.p2p.JsonDecoder;
 import com.kzone.p2p.JsonEncoder;
@@ -15,6 +16,8 @@ import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
+import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
+import io.netty.handler.codec.LengthFieldPrepender;
 import io.netty.handler.stream.ChunkedFile;
 import io.netty.handler.stream.ChunkedWriteHandler;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +34,7 @@ import java.util.UUID;
 public class PeerClientHandler extends ChannelInboundHandlerAdapter {
 
     private final FolderService folderService;
+    private final FileMetadataMaintainer mtdMaintainer;
 
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
@@ -44,34 +48,31 @@ public class PeerClientHandler extends ChannelInboundHandlerAdapter {
         if (msg instanceof ModifyFolderCommand command) {
             //TODO create files here
             folderService.createFolder(command.folders());
-//            ctx.channel().writeAndFlush(new FolderModifiedEvent(ClientUtil.getClientName(), command.id()));
+            ctx.channel().writeAndFlush(new FolderModifiedEvent(ClientUtil.getClientName(), command.id()));
         }
 
-        if (msg instanceof FolderModifiedEvent event) {
-            final var s = UUID.randomUUID() + ".txt";
-            final var path = Paths.get(App.DIRECTORY, s);
-            Files.createFile(path);
-            final var size = Files.size(path);
-            ctx.channel().writeAndFlush(new ReadyToUploadCommand(ClientUtil.getClientName(), event.id(), s, "", size));
-            return;
-        }
         if (msg instanceof ReadyToUploadCommand command) {
-            ctx.pipeline().remove(JsonDecoder.class);
-            ctx.pipeline().remove(PeerClientHandler.class);
-            ctx.pipeline().addLast(new ChunkedWriteHandler());
-            ctx.pipeline().addLast(new FilesInboundClientHandler(command.fileName(), command.directory(), command.fileSize(), this, command.id()));
-            ctx.channel().writeAndFlush(new ReadyToReceiveCommand(command.peerHost(), command.id(), command.fileName(), command.directory(), command.fileSize()));
+            if(mtdMaintainer.isModified(command.fileName(), command.checkSum())){
+                ctx.pipeline().remove(JsonDecoder.class);
+                ctx.pipeline().remove(this.getClass());
+                ctx.pipeline().remove(LengthFieldBasedFrameDecoder.class);
+                ctx.pipeline().addLast(new ChunkedWriteHandler());
+                ctx.pipeline().addLast(new FilesInboundClientHandler(command.fileName(), command.fileSize(),  command.id(),this));
+                ctx.channel().writeAndFlush(new ReadyToReceiveCommand(command.id(), command.fileName()));
+            }
+
         }
 
         //ready to send
         if (msg instanceof ReadyToReceiveCommand command) {
             ctx.pipeline().remove(JsonEncoder.class);
-//            ctx.pipeline().remove(PeerClientHandler.class);
+            ctx.pipeline().remove(this.getClass());
+            ctx.pipeline().remove(LengthFieldPrepender.class);
             ctx.pipeline().addLast(new ChunkedWriteHandler());
-            ctx.pipeline().addLast(new FilesInboundHandler(command.fileName(), command.directory(), command.fileSize(), this, command.id()));
+//            ctx.pipeline().addLast(new FilesInboundHandler(command.fileName(), command.directory(), command.fileSize(), this, command.id()));
 
-            var filePath = App.DIRECTORY + File.separator + command.directory() + File.separator + command.fileName();
-            ctx.channel().writeAndFlush(new ChunkedFile(new File(filePath))).addListener((ChannelFutureListener) future -> {
+            var filePath = Paths.get(App.DIRECTORY,command.fileName());
+            ctx.channel().writeAndFlush(new ChunkedFile(filePath.toFile())).addListener((ChannelFutureListener) future -> {
                 if (future.isSuccess()) {
                     log.info("Upload success");
                     return;

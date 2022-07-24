@@ -24,6 +24,7 @@ import lombok.extern.log4j.Log4j2;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.UUID;
@@ -68,17 +69,19 @@ public class App {
         var folderService = new FolderService();
         final var metadataMaintainer = new FileMetadataMaintainer(Paths.get(METADATA_DIRECTORY));
 
-        var of = Paths.get(DIRECTORY);
-        final var folderHierarchy = FileUtil.getFolderHierarchy(of);
-        log.info(folderHierarchy);
+        var contentPath = Paths.get(DIRECTORY);
+        final var folderHierarchy = FileUtil.getFolderHierarchy(contentPath);
+        log.debug(folderHierarchy);
+
+        //Creating metadata for folders
         folderHierarchy.forEach(metadataMaintainer::createMetadataDirectoryPath);
-        final var fileMetadata = FileUtil.getFileMetadata(of);
+        final var fileMetadata = FileUtil.getFileMetadata(contentPath);
         metadataMaintainer.saveFileMetadata(fileMetadata);
 
-        final var peerClient = new PeerClient(new Bootstrap(), new NioEventLoopGroup(), JSON_DECODER, JSON_ENCODER, new PeerClientHandler(folderService));
+        final var peerClient = new PeerClient(new Bootstrap(), new NioEventLoopGroup(), JSON_DECODER, JSON_ENCODER, new PeerClientHandler(folderService,metadataMaintainer));
         peerClient.init();
-        new Thread(new PeerServer(PEER_SERVER_PORT, JSON_DECODER, JSON_ENCODER, new PeerServerHandler(folderService))).start();
-        new Thread(new WatchDir(of)).start();
+        new Thread(new PeerServer(PEER_SERVER_PORT, JSON_DECODER, JSON_ENCODER, new PeerServerHandler(folderService,metadataMaintainer))).start();
+        new Thread(new WatchDir(contentPath, FileSystems.getDefault().newWatchService(),metadataMaintainer)).start();
         log.info("Connecting to server {}", HOST);
         new Thread(new ClientConnector(HOST, PORT, new ClientHandler(peerClient))).start();
         new Thread(new Sender(MESSAGE_HOLDER)).start();

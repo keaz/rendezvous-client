@@ -6,11 +6,17 @@ import com.kzone.util.ClientUtil;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
+import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
 import io.netty.handler.stream.ChunkedWriteHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 
-import java.io.*;
+import java.io.File;
+import java.io.IOException;
+import java.io.RandomAccessFile;
+import java.nio.channels.OverlappingFileLockException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.UUID;
 
 @RequiredArgsConstructor
@@ -18,46 +24,65 @@ import java.util.UUID;
 public class FilesInboundClientHandler extends ChannelInboundHandlerAdapter {
 
     private final String fileName;
-    private final String directory;
     private final Long fileSize;
-    private final ChannelInboundHandlerAdapter parentAdapter;
-
     private final UUID id;
+    private final ChannelInboundHandlerAdapter parentAdapter;
 
 
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object chunkedFile) throws Exception {
         ByteBuf byteBuf = (ByteBuf) chunkedFile;
 
-        String absoluteFileNameForClient = App.DIRECTORY + File.separator + directory + File.separator + fileName;
-        File newfile = new File(absoluteFileNameForClient);
+        final var path = Paths.get(App.DIRECTORY, fileName);
+        final var pathTmp = Paths.get("/tmp", fileName);
 
-        newfile.createNewFile();
-
-        wrightNewFileContent(absoluteFileNameForClient, byteBuf);
-
-        createAnswerAboutSuccessDownload(newfile, ctx);
-
-    }
-
-    private void wrightNewFileContent(String absoluteFileNameForClient, ByteBuf byteBuf) throws IOException {
-        try (OutputStream out = new BufferedOutputStream(new FileOutputStream(absoluteFileNameForClient, true))) {
-            while (byteBuf.isReadable()) {
-                out.write(byteBuf.readByte());
-            }
-            byteBuf.release();
+        if (Files.exists(path)) {
+            Files.move(path, pathTmp);
+            Files.delete(path);
         }
+
+        Files.createFile(path);
+        final var file = path.toFile();
+        wrightNewFileContent(file, byteBuf);
+        sendResponseOnSuccess(file, ctx);
+        Files.delete(pathTmp);
     }
 
-    private void createAnswerAboutSuccessDownload(File file, ChannelHandlerContext ctx) {
+    private void wrightNewFileContent(File file, ByteBuf byteBuf) throws IOException {
+
+
+        try (var randomAccessFile = new RandomAccessFile(file, "w");
+             var channel = randomAccessFile.getChannel()) {
+            var lock = channel.tryLock();
+            while (byteBuf.isReadable()) {
+                randomAccessFile.write(byteBuf.readByte());
+            }
+            lock.release();
+        } catch (final OverlappingFileLockException e) {
+            log.error("OverlappingFileLockException ", e);
+        }
+
+
+//        try (OutputStream out = new BufferedOutputStream(new FileOutputStream(file, true))) {
+//            while (byteBuf.isReadable()) {
+//                out.write(byteBuf.readByte());
+//            }
+//            byteBuf.release();
+//        }
+
+    }
+
+    private void sendResponseOnSuccess(File file, ChannelHandlerContext ctx) {
         if (file.length() == fileSize) {
             //After download, we have to set the default pipeline settings
             ctx.pipeline().remove(ChunkedWriteHandler.class);
             ctx.pipeline().remove(FilesInboundClientHandler.class);
-            ctx.pipeline().addLast(App.JSON_DECODER);
+            ctx.pipeline().addLast("peer-decoder",App.JSON_DECODER);
+            ctx.pipeline().addLast("frameDecoder",
+                    new LengthFieldBasedFrameDecoder(1048576, 0, 4, 0, 4));
             ctx.pipeline().addLast(parentAdapter);
 
-            ctx.writeAndFlush(new DownloadCompletedEvent(ClientUtil.getClientName(), id, fileName, directory));
+            ctx.writeAndFlush(new DownloadCompletedEvent(id, fileName));
 
         }
     }

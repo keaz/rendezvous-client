@@ -2,6 +2,7 @@ package com.kzone.file;
 
 import com.kzone.App;
 import com.kzone.p2p.command.CreateFolderCommand;
+import com.kzone.p2p.command.ReadyToUploadCommand;
 import lombok.extern.log4j.Log4j2;
 
 import java.io.IOException;
@@ -26,15 +27,18 @@ public class WatchDir implements Runnable {
     private final Map<WatchKey, Path> keys;
     private final boolean trace;
 
+    private final FileMetadataMaintainer fileMetadataMaintainer;
+
     private final Path root;
 
     /**
      * Creates a WatchService and registers the given directory
      */
-    public WatchDir(Path dir) throws IOException {
-        this.watcher = FileSystems.getDefault().newWatchService();
-        this.keys = new HashMap<>();
+    public WatchDir(Path dir,WatchService watcher,FileMetadataMaintainer fileMetadataMaintainer) throws IOException {
+        this.watcher = watcher;
         this.root = dir;
+        this.fileMetadataMaintainer = fileMetadataMaintainer;
+        this.keys = new HashMap<>();
 
         log.info("Scanning {}", root);
         registerAll(root);
@@ -42,12 +46,6 @@ public class WatchDir implements Runnable {
         // enable trace after initial registration
         this.trace = true;
     }
-
-    @SuppressWarnings("unchecked")
-    static <T> WatchEvent<T> cast(WatchEvent<?> event) {
-        return (WatchEvent<T>) event;
-    }
-
 
     /**
      * Register the given directory with the WatchService
@@ -117,19 +115,17 @@ public class WatchDir implements Runnable {
                 var name = ev.context();
                 var child = dir.resolve(name);
                 var rootRelative = root.relativize(root.resolve(child));
-
                 // print out event
                 log.info("{}: {}", event.kind().name(), rootRelative);
-                if(rootRelative.toFile().isFile()) {
-                    log.info("Checksum {} for {} ", FileUtil.getFileChecksum(rootRelative.toFile()), rootRelative);
-                }
+
                 // if directory is created, and watching recursively, then
                 // register it and its sub-directories
+                final var rootRelativePath = rootRelative.toString();
                 if (kind == ENTRY_CREATE) {
 
                     try {
-                        if (Files.isDirectory(child, NOFOLLOW_LINKS)) {
-                            App.MESSAGE_HOLDER.putMessage(new CreateFolderCommand(UUID.randomUUID(), Collections.singletonList(new Folder(rootRelative.toString()))));
+                        if (Files.isDirectory(rootRelative, NOFOLLOW_LINKS)) {
+                            App.MESSAGE_HOLDER.putMessage(new CreateFolderCommand(UUID.randomUUID(), Collections.singletonList(new Folder(rootRelativePath))));
                             registerAll(child);
                         }
                     } catch (IOException x) {
@@ -140,7 +136,22 @@ public class WatchDir implements Runnable {
 
                 if (kind == ENTRY_MODIFY) {
                     log.info("{} modified ", rootRelative);
-
+                    if (!Files.isDirectory(child, NOFOLLOW_LINKS)){
+                        //Check checkSum
+                        //Create Command
+                        //Update new checksum in mtd
+                        var checksum = FileUtil.getFileChecksum(rootRelative.toFile());
+                        var modified = fileMetadataMaintainer.isModified(rootRelativePath, checksum);
+                        try {
+                            var size = Files.size(rootRelative);
+                            if(modified){
+                                App.MESSAGE_HOLDER.putMessage(new ReadyToUploadCommand(UUID.randomUUID(),rootRelativePath,size,checksum));
+                                //TODO update new checksum
+                            }
+                        } catch (IOException e) {
+                            throw new RuntimeException(e);
+                        }
+                    }
                     continue;
                 }
                 if (kind == ENTRY_DELETE) {

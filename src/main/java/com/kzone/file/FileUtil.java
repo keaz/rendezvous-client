@@ -17,6 +17,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 @Log4j2
@@ -99,13 +100,20 @@ public class FileUtil {
                 public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
                     log.debug("Visiting directory {}", dir);
                     if (Files.isDirectory(dir)) {
+
                         try (var stream = Files.list(dir)) {
-                            stream.filter(Files::isRegularFile)
-                                    .map(path -> {
-                                        final var resolve = root.resolve(path);
-                                        final var relativize = root.relativize(resolve);
-                                        return new FileMetadata(relativize.toString(), FileUtil.getFileChecksum(path.toFile()));
-                                    }).forEach(files::add);
+
+                            final var metadataMap = stream.filter(Files::isRegularFile).collect(Collectors.toMap(path -> {
+                                final var relativize = dir.relativize(path);
+                                return relativize.toString();
+                            }, path -> FileUtil.getFileChecksum(path.toFile())));
+
+
+                            final var resolve = root.resolve(dir);
+                            final var relativize = root.relativize(resolve);
+                            files.add(new FileMetadata(relativize.toString(), metadataMap));
+
+
                         }
                     }
                     return FileVisitResult.CONTINUE;
