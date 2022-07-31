@@ -4,6 +4,7 @@ import com.kzone.App;
 import com.kzone.client.event.ClientInfo;
 import com.kzone.file.FileUtil;
 import com.kzone.p2p.command.CreateFolderCommand;
+import com.kzone.p2p.command.ReadyToUploadCommand;
 import com.kzone.p2p.handler.PeerClientHandler;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.*;
@@ -59,11 +60,12 @@ public record PeerClient(Bootstrap bootstrap, NioEventLoopGroup group, ChannelIn
                 final var sync = bootstrap.connect(clientInfo.address(), clientInfo.port()).sync();
                 final var channel = sync.channel();
                 SESSION_HOLDER.addPeer(clientInfo.address(), clientInfo.port(), channel);
-                final var folderHierarchy = FileUtil.getFolderHierarchy(Paths.get(App.DIRECTORY));
+                final var folderHierarchy = FileUtil.getFolderHierarchy();
                 log.debug("******** Peer Sending file hierarchy {}", folderHierarchy);
-                folderHierarchy.forEach(folders -> {
-                    channel.writeAndFlush(new CreateFolderCommand(UUID.randomUUID(), folders));
-                });
+                folderHierarchy.forEach(folders -> channel.writeAndFlush(new CreateFolderCommand(UUID.randomUUID(), folders)));
+
+//                final var allFiles = FileUtil.getAllFiles();
+//                allFiles.forEach(channel::writeAndFlush);
 //                channel.writeAndFlush(message);
             } catch (InterruptedException e) {
                 log.error("Error connecting to peer serve", e);

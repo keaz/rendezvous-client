@@ -12,7 +12,9 @@ import com.kzone.p2p.command.ModifyFolderCommand;
 import com.kzone.p2p.command.ReadyToReceiveCommand;
 import com.kzone.p2p.command.ReadyToUploadCommand;
 import com.kzone.p2p.event.DownloadCompletedEvent;
+import com.kzone.p2p.event.DownloadFailedEvent;
 import com.kzone.p2p.event.FolderModifiedEvent;
+import com.kzone.p2p.event.UploadRejectedEvent;
 import com.kzone.util.ClientUtil;
 import io.netty.channel.*;
 import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
@@ -22,9 +24,7 @@ import io.netty.handler.stream.ChunkedWriteHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 
-import java.io.File;
 import java.net.InetSocketAddress;
-import java.nio.file.Paths;
 import java.util.Queue;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -50,7 +50,7 @@ public class PeerServerHandler extends ChannelInboundHandlerAdapter {
         }
         PeersSessionHolder.getPeersSessionHolder().addPeer(socketAddress.getAddress().getHostAddress(), socketAddress.getPort(), channel);
 
-        final var folderHierarchy = FileUtil.getFolderHierarchy(Paths.get(App.DIRECTORY));
+        final var folderHierarchy = FileUtil.getFolderHierarchy();
         folderHierarchy.forEach(folders -> {
             channel.writeAndFlush(new CreateFolderCommand(UUID.randomUUID(), folders));
         });
@@ -65,6 +65,7 @@ public class PeerServerHandler extends ChannelInboundHandlerAdapter {
         if (msg instanceof CreateFolderCommand command) {
             //TODO create files here
             folderService.createFolder(command.folders());
+            return;
 //            ctx.channel().writeAndFlush(new FolderModifiedEvent(ClientUtil.getClientName(), command.id()));
         }
 
@@ -72,39 +73,35 @@ public class PeerServerHandler extends ChannelInboundHandlerAdapter {
             //TODO create files here
             folderService.createFolder(command.folders());
             ctx.channel().writeAndFlush(new FolderModifiedEvent(ClientUtil.getClientName(), command.id()));
+            return;
         }
 
-//        if (msg instanceof FolderModifiedEvent event) {
-//
-//            final var s = UUID.randomUUID() + ".txt";
-//            final var path = Paths.get(App.DIRECTORY, s);
-//            Files.createFile(path);
-//            final var size = Files.size(path);
-//            ctx.channel().writeAndFlush(new ReadyToUploadCommand(ClientUtil.getClientName(), event.id(), s, "", size));
-//            return;
-//        }
         if (msg instanceof ReadyToUploadCommand command) {
             if(mtdMaintainer.isModified(command.fileName(), command.checkSum())){
-                ctx.pipeline().remove(JsonDecoder.class);
-                ctx.pipeline().remove(this.getClass());
-                ctx.pipeline().remove(LengthFieldBasedFrameDecoder.class);
-                ctx.pipeline().addLast(new ChunkedWriteHandler());
-                ctx.pipeline().addLast(new FilesInboundClientHandler(command.fileName(), command.fileSize(),  command.id(),this));
+                removedJsonDecoders(ctx);
+                addFileDecoders(ctx, command);
                 ctx.channel().writeAndFlush(new ReadyToReceiveCommand(command.id(), command.fileName()));
+                return;
             }
 
+            ctx.channel().writeAndFlush(new UploadRejectedEvent(command.id(), command.fileName()));
+            return;
         }
 
+        if(msg instanceof UploadRejectedEvent event){
+            log.info("{} already exists on the peer ",event.fileName());
+            return;
+        }
         //ready to send
         if (msg instanceof ReadyToReceiveCommand command) {
-            ctx.pipeline().remove(JsonEncoder.class);
-            ctx.pipeline().remove(this.getClass());
-            ctx.pipeline().remove(LengthFieldPrepender.class);
-            ctx.pipeline().addLast(new ChunkedWriteHandler());
+            removeJsonEncoders(ctx);
+            addFileEncoders(ctx);
 //            ctx.pipeline().addLast(new FilesInboundHandler(command.fileName(), command.directory(), command.fileSize(), this, command.id()));
 
-            var filePath = Paths.get(App.DIRECTORY,command.fileName());
+            var filePath = App.DIRECTORY.resolve(command.fileName());
             ctx.channel().writeAndFlush(new ChunkedFile(filePath.toFile())).addListener((ChannelFutureListener) future -> {
+                addJsonEncoders(ctx);
+                removeFileEncoder(ctx);
                 if (future.isSuccess()) {
                     log.info("Upload success");
                     return;
@@ -119,12 +116,47 @@ public class PeerServerHandler extends ChannelInboundHandlerAdapter {
 
         if (msg instanceof DownloadCompletedEvent completedEvent) {
             log.info("{} successfully downloaded for id {}", completedEvent.fileName(), completedEvent.uuid());
+            return;
+        }
+
+        if (msg instanceof DownloadFailedEvent completedEvent) {
+            log.info("{} failed to downloaded for id {}", completedEvent.fileName(), completedEvent.uuid());
+            return;
         }
 //        for (var c : channels) {
 //            if(msg instanceof Message peerMessage) {
 //                c.writeAndFlush(new Message(peerMessage.clientId(),peerMessage.message()+" Server UUID :"+ App.uuid));
 //            }
 //        }
+    }
+
+    private ChunkedWriteHandler removeFileEncoder(ChannelHandlerContext ctx) {
+        return ctx.pipeline().remove(ChunkedWriteHandler.class);
+    }
+
+    private void addJsonEncoders(ChannelHandlerContext ctx) {
+        ctx.pipeline().addLast(App.JSON_ENCODER);
+        ctx.pipeline().addLast("frameEncoder", new LengthFieldPrepender(4));
+    }
+
+    private void addFileEncoders(ChannelHandlerContext ctx) {
+        ctx.pipeline().addLast(new ChunkedWriteHandler());
+    }
+
+    private void removeJsonEncoders(ChannelHandlerContext ctx) {
+        ctx.pipeline().remove(JsonEncoder.class);
+        ctx.pipeline().remove(LengthFieldPrepender.class);
+    }
+
+    private void addFileDecoders(ChannelHandlerContext ctx, ReadyToUploadCommand command) {
+        addFileEncoders(ctx);
+        ctx.pipeline().addLast(new FilesInboundClientHandler(command.fileName(), command.fileSize(),  command.id(),command.checkSum(),this,mtdMaintainer));
+    }
+
+    private void removedJsonDecoders(ChannelHandlerContext ctx) {
+        ctx.pipeline().remove(JsonDecoder.class);
+        ctx.pipeline().remove(this.getClass());
+        ctx.pipeline().remove(LengthFieldBasedFrameDecoder.class);
     }
 
     @Override

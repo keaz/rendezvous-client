@@ -1,15 +1,14 @@
 package com.kzone.file;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.util.List;
 
 @RequiredArgsConstructor
@@ -36,15 +35,15 @@ public class FileMetadataMaintainer {
         });
     }
 
-    public void saveFileMetadata(List<FileMetadata> fileMetadata) {
-        fileMetadata.forEach(metadata -> {
+    public void saveFileMetadata(List<FolderMetadata> folderMetadata) {
+        folderMetadata.forEach(metadata -> {
             final var path = Paths.get(metaDataDirectory.toAbsolutePath().toString(), metadata.filePath());
             try {
                 if (!Files.exists(path)) {
                     Files.createFile(path);
                 }
 
-                mapper.writeValue(Paths.get(path.toString(), MTD_JSON).toFile(), metadata.metaData());
+                mapper.writeValue(Paths.get(path.toString(), MTD_JSON).toFile(), metadata);
 
             } catch (IOException e) {
                 throw new RuntimeException(e);
@@ -52,22 +51,84 @@ public class FileMetadataMaintainer {
         });
     }
 
-    public boolean isModified(String path,String checkSum){
+    public boolean isModified(String path, String checkSum) {
         final var resolve = metaDataDirectory.resolve(path);
         final var parent = resolve.getParent();
-        final var file = parent.resolve(MTD_JSON).toFile();
         final var fileName = parent.relativize(resolve).toString();
+        final var file = parent.resolve(MTD_JSON).toFile();
         try {
-            final var mtdJson = mapper.readTree(file);
-            if(mtdJson.get(fileName).isNull()){
-                return false;
+            final var folderMetadata = mapper.readValue(file, FolderMetadata.class);
+            final var fileMetadataMap = folderMetadata.metaData();
+            if (!fileMetadataMap.containsKey(fileName)) {
+                return true;
             }
-            final var oldChecksum = mtdJson.get(fileName).asText();
+
+            final var fileMetadata = fileMetadataMap.get(fileName);
+            final var oldChecksum = fileMetadata.metaData().checkSum();
             return !checkSum.equalsIgnoreCase(oldChecksum);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+    }
 
+
+    public void updateMetadata(String path, String newCheckSum) {
+        final var resolve = metaDataDirectory.resolve(path);
+        final var parent = resolve.getParent();
+        final var fileName = parent.relativize(resolve).toString();
+        final var mtdJsonPath = parent.resolve(MTD_JSON);
+        final var file = mtdJsonPath.toFile();
+        try {
+            final var folderMetadata = mapper.readValue(file, FolderMetadata.class);
+            final var fileMetadataMap = folderMetadata.metaData();
+            final var fileMetadata = new FileMetadata(fileName, new Metadata(newCheckSum, false));
+            fileMetadataMap.put(fileName, fileMetadata);
+
+            final var bytes = mapper.writer().writeValueAsBytes(folderMetadata);
+            Files.write(mtdJsonPath, bytes, StandardOpenOption.WRITE);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void updateStatus(String path, boolean isUpdating) {
+        final var resolve = metaDataDirectory.resolve(path);
+        final var parent = resolve.getParent();
+        final var fileName = parent.relativize(resolve).toString();
+        final var mtdJsonPath = parent.resolve(MTD_JSON);
+        final var file = mtdJsonPath.toFile();
+        try {
+            final var folderMetadata = mapper.readValue(file, FolderMetadata.class);
+            final var fileMetadataMap = folderMetadata.metaData();
+            final var oldMetadata = fileMetadataMap.get(fileName);
+            final var fileMetadata = new FileMetadata(fileName, new Metadata(oldMetadata.metaData().checkSum(), isUpdating));
+            fileMetadataMap.put(fileName, fileMetadata);
+
+            final var bytes = mapper.writer().writeValueAsBytes(folderMetadata);
+            Files.write(mtdJsonPath, bytes, StandardOpenOption.WRITE);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public boolean isUpdating(String path) {
+        final var resolve = metaDataDirectory.resolve(path);
+        final var parent = resolve.getParent();
+        final var fileName = parent.relativize(resolve).toString();
+        final var mtdJsonPath = parent.resolve(MTD_JSON);
+        final var file = mtdJsonPath.toFile();
+        try {
+            final var folderMetadata = mapper.readValue(file, FolderMetadata.class);
+            final var fileMetadataMap = folderMetadata.metaData();
+            final var oldMetadata = fileMetadataMap.get(fileName);
+            if(oldMetadata == null){
+                return false;
+            }
+            return oldMetadata.metaData().idUpdating();
+
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 
 }

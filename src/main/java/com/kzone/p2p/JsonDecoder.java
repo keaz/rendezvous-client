@@ -35,7 +35,7 @@ public class JsonDecoder extends MessageToMessageDecoder<ByteBuf> {
         }
 
         final var stringMessage = baos.toString(StandardCharsets.UTF_8);
-
+        log.debug("Received message {}",stringMessage);
         final var jsonNode = objectMapper.readTree(stringMessage);
         final Class<?> aClass = Class.forName(jsonNode.get("@type").asText());
         var message = objectMapper.readValue(stringMessage, aClass);

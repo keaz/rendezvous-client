@@ -54,7 +54,7 @@ public class FilesInboundHandler extends ChannelInboundHandlerAdapter {
         if (file.length() == fileSize) {
 //            ServerPipelineCheckoutService.createBasePipelineAfterUploadForInOutCommandTraffic(ctx);
             ctx.pipeline().remove(ChunkedWriteHandler.class);
-            ctx.pipeline().remove(FilesInboundHandler.class);
+//            ctx.pipeline().remove(FilesInboundHandler.class);
             ctx.pipeline().addLast(App.JSON_DECODER);
             ctx.pipeline().addLast(App.JSON_ENCODER);
             ctx.pipeline().addLast(parentAdapter);

@@ -34,7 +34,7 @@ public class WatchDir implements Runnable {
     /**
      * Creates a WatchService and registers the given directory
      */
-    public WatchDir(Path dir,WatchService watcher,FileMetadataMaintainer fileMetadataMaintainer) throws IOException {
+    public WatchDir(Path dir, WatchService watcher, FileMetadataMaintainer fileMetadataMaintainer) throws IOException {
         this.watcher = watcher;
         this.root = dir;
         this.fileMetadataMaintainer = fileMetadataMaintainer;
@@ -124,9 +124,11 @@ public class WatchDir implements Runnable {
                 if (kind == ENTRY_CREATE) {
 
                     try {
-                        if (Files.isDirectory(rootRelative, NOFOLLOW_LINKS)) {
+                        if (Files.isDirectory(child, NOFOLLOW_LINKS)) {
                             App.MESSAGE_HOLDER.putMessage(new CreateFolderCommand(UUID.randomUUID(), Collections.singletonList(new Folder(rootRelativePath))));
                             registerAll(child);
+                        } else {
+                            sendUploadCommand(child, rootRelativePath);
                         }
                     } catch (IOException x) {
                         log.error("Failed to register ", x);
@@ -136,21 +138,8 @@ public class WatchDir implements Runnable {
 
                 if (kind == ENTRY_MODIFY) {
                     log.info("{} modified ", rootRelative);
-                    if (!Files.isDirectory(child, NOFOLLOW_LINKS)){
-                        //Check checkSum
-                        //Create Command
-                        //Update new checksum in mtd
-                        var checksum = FileUtil.getFileChecksum(rootRelative.toFile());
-                        var modified = fileMetadataMaintainer.isModified(rootRelativePath, checksum);
-                        try {
-                            var size = Files.size(rootRelative);
-                            if(modified){
-                                App.MESSAGE_HOLDER.putMessage(new ReadyToUploadCommand(UUID.randomUUID(),rootRelativePath,size,checksum));
-                                //TODO update new checksum
-                            }
-                        } catch (IOException e) {
-                            throw new RuntimeException(e);
-                        }
+                    if (!Files.isDirectory(child, NOFOLLOW_LINKS)) {
+                        sendUploadCommand(child, rootRelativePath);
                     }
                     continue;
                 }
@@ -170,6 +159,22 @@ public class WatchDir implements Runnable {
                     break;
                 }
             }
+        }
+    }
+
+    private void sendUploadCommand(Path path, String rootRelativePath) {
+        if(fileMetadataMaintainer.isUpdating(rootRelativePath)){
+            return;
+        }
+        var checksum = FileUtil.getFileChecksum(path.toAbsolutePath().toFile());
+        try {
+            if (fileMetadataMaintainer.isModified(rootRelativePath, checksum)) {
+                var size = Files.size(path);
+                App.MESSAGE_HOLDER.putMessage(new ReadyToUploadCommand(UUID.randomUUID(), rootRelativePath, size, checksum));
+                fileMetadataMaintainer.updateMetadata(rootRelativePath, checksum);
+            }
+        } catch (IOException e) {
+            log.error("Failed to read file ", e);
         }
     }
 }

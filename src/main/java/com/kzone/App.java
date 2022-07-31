@@ -26,6 +26,7 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.UUID;
 
@@ -38,7 +39,7 @@ public class App {
 
     public static final String HOST_NAME;
     public static final int PEER_SERVER_PORT = 8018;
-    public static final String DIRECTORY = System.getenv("DIRECTORY") == null ? "/tmp" : System.getenv("DIRECTORY");
+    public static final Path DIRECTORY = Paths.get(System.getenv("DIRECTORY") == null ? "/tmp" : System.getenv("DIRECTORY"));
     public static final String METADATA_DIRECTORY = System.getenv("METADATA_DIRECTORY") == null ? ".mtd" : System.getenv("METADATA_DIRECTORY");
     public static final MessageHolder MESSAGE_HOLDER = new MessageHolder();
     static final String HOST = System.getenv("SERVER_HOST") == null ? "host.docker.internal" : System.getenv("SERVER_HOST");
@@ -61,27 +62,21 @@ public class App {
 
     public static void main(String[] args) throws IOException {
 
-        //#TODO to be removed
-        final var s = UUID.randomUUID().toString();
-        final var path = Paths.get(App.DIRECTORY, s);
-        Files.createDirectory(path);
-
-        var folderService = new FolderService();
         final var metadataMaintainer = new FileMetadataMaintainer(Paths.get(METADATA_DIRECTORY));
+        var folderService = new FolderService(metadataMaintainer);
 
-        var contentPath = Paths.get(DIRECTORY);
-        final var folderHierarchy = FileUtil.getFolderHierarchy(contentPath);
+        final var folderHierarchy = FileUtil.getFolderHierarchy();
         log.debug(folderHierarchy);
 
         //Creating metadata for folders
         folderHierarchy.forEach(metadataMaintainer::createMetadataDirectoryPath);
-        final var fileMetadata = FileUtil.getFileMetadata(contentPath);
+        final var fileMetadata = FileUtil.getFileMetadata();
         metadataMaintainer.saveFileMetadata(fileMetadata);
 
         final var peerClient = new PeerClient(new Bootstrap(), new NioEventLoopGroup(), JSON_DECODER, JSON_ENCODER, new PeerClientHandler(folderService,metadataMaintainer));
         peerClient.init();
         new Thread(new PeerServer(PEER_SERVER_PORT, JSON_DECODER, JSON_ENCODER, new PeerServerHandler(folderService,metadataMaintainer))).start();
-        new Thread(new WatchDir(contentPath, FileSystems.getDefault().newWatchService(),metadataMaintainer)).start();
+        new Thread(new WatchDir(DIRECTORY, FileSystems.getDefault().newWatchService(),metadataMaintainer)).start();
         log.info("Connecting to server {}", HOST);
         new Thread(new ClientConnector(HOST, PORT, new ClientHandler(peerClient))).start();
         new Thread(new Sender(MESSAGE_HOLDER)).start();
