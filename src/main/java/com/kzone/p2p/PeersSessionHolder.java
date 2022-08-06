@@ -5,8 +5,15 @@ import io.netty.channel.Channel;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class PeersSessionHolder {
+
+    private final Lock lock = new ReentrantLock();
+    private final Condition isEmpty = lock.newCondition();
+    private final Condition hasElement = lock.newCondition();
 
     private static final PeersSessionHolder SINGLETON = new PeersSessionHolder();
     private final Map<String, Peer> peers = new ConcurrentHashMap<>();
@@ -19,16 +26,42 @@ public class PeersSessionHolder {
     }
 
     public void addPeer(String host, int port, Channel channel) {
-        var key = host + port;
-        peers.put(key, new Peer(host, port, channel));
+        try {
+            lock.lock();
+            var key = host + port;
+            peers.put(key, new Peer(host, port, channel));
+            isEmpty.signalAll();
+        }finally {
+            lock.unlock();
+        }
     }
 
     public void removePeer(String host, int port) {
-        var key = host + port;
-        peers.remove(key);
+        try {
+            lock.lock();
+            var key = host + port;
+            peers.remove(key);
+            if(peers.isEmpty()){
+                hasElement.await();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } finally {
+            lock.unlock();
+        }
     }
 
     public List<Peer> getPeers() {
+        try {
+            lock.lock();
+            while (peers.isEmpty()){
+                isEmpty.await();
+            }
+        }catch (InterruptedException exception){
+            Thread.currentThread().interrupt();
+        }finally {
+            lock.unlock();
+        }
         return peers.values().stream().sorted().toList();
     }
 

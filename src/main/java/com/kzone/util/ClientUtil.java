@@ -1,5 +1,6 @@
 package com.kzone.util;
 
+import com.kzone.App;
 import lombok.experimental.UtilityClass;
 
 import java.net.InetAddress;

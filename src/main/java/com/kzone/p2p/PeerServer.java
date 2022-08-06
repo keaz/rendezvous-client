@@ -1,17 +1,23 @@
 package com.kzone.p2p;
 
+import com.kzone.p2p.handler.PeerServerHandler;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
+import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
+import io.netty.handler.codec.LengthFieldPrepender;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 
-import java.net.InetSocketAddress;
-
 @Log4j2
-public record PeerServer(int port, ChannelInboundHandlerAdapter decoder,
-                         ChannelOutboundHandlerAdapter encoder, PeerServerHandler clientHandler) implements Runnable {
+@RequiredArgsConstructor
+public class PeerServer implements Runnable {
+    private final int port;
+    private final ChannelInboundHandlerAdapter decoder;
+    private final ChannelOutboundHandlerAdapter encoder;
+    private final PeerServerHandler clientHandler;
 
     @Override
     public void run() {
@@ -25,10 +31,13 @@ public record PeerServer(int port, ChannelInboundHandlerAdapter decoder,
             bootstrap.childHandler(new ChannelInitializer<SocketChannel>() {
                 @Override
                 public void initChannel(SocketChannel ch) throws Exception {
-                    ChannelPipeline p = ch.pipeline();
-                    p.addLast("peer-decoder", decoder);
-                    p.addLast("peer-encoder", encoder);
-                    p.addLast("peer-handler", clientHandler);
+                    ChannelPipeline pipeline = ch.pipeline();
+                    pipeline.addLast("frameDecoder",
+                            new LengthFieldBasedFrameDecoder(1048576, 0, 4, 0, 4));
+                    pipeline.addLast("peer-decoder", decoder);
+                    pipeline.addLast("frameEncoder", new LengthFieldPrepender(4));
+                    pipeline.addLast("peer-encoder", encoder);
+                    pipeline.addLast("peer-handler", clientHandler);
                 }
             });
             bootstrap.option(ChannelOption.SO_BACKLOG, 128);

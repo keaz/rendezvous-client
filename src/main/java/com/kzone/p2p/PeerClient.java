@@ -2,19 +2,23 @@ package com.kzone.p2p;
 
 import com.kzone.App;
 import com.kzone.client.event.ClientInfo;
-import com.kzone.p2p.event.Message;
-import com.kzone.util.ClientUtil;
+import com.kzone.file.FileUtil;
+import com.kzone.p2p.command.CreateFolderCommand;
+import com.kzone.p2p.command.ReadyToUploadCommand;
+import com.kzone.p2p.handler.PeerClientHandler;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
+import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
+import io.netty.handler.codec.LengthFieldPrepender;
 import lombok.extern.log4j.Log4j2;
 
-import java.net.InetAddress;
-import java.net.UnknownHostException;
+import java.nio.file.Paths;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.UUID;
 
 @Log4j2
 public record PeerClient(Bootstrap bootstrap, NioEventLoopGroup group, ChannelInboundHandlerAdapter decoder,
@@ -34,7 +38,10 @@ public record PeerClient(Bootstrap bootstrap, NioEventLoopGroup group, ChannelIn
             public void initChannel(SocketChannel ch) throws Exception {
                 ChannelPipeline pipeline = ch.pipeline();
 //                            pipeline.addLast(new LoggingHandler(LogLevel.INFO));
+                pipeline.addLast("frameDecoder",
+                        new LengthFieldBasedFrameDecoder(1048576, 0, 4, 0, 4));
                 pipeline.addLast(decoder);
+                pipeline.addLast("frameEncoder", new LengthFieldPrepender(4));
                 pipeline.addLast(encoder);
                 pipeline.addLast(clientHandler);
 
@@ -47,24 +54,25 @@ public record PeerClient(Bootstrap bootstrap, NioEventLoopGroup group, ChannelIn
         CLIENT_INFO_LIST.addAll(clientInfoList);
 
         for (ClientInfo clientInfo : clientInfoList) {
-//            if(SESSION_HOLDER.isPeerExists(clientInfo.host(),clientInfo.port())){
-//                log.warn("Peer already exists with host:{} port:{}",clientInfo.host(),clientInfo.port());
-//                continue;
-//            }
+
             try {
                 log.info("Connecting to peer: {}", clientInfo);
                 final var sync = bootstrap.connect(clientInfo.address(), clientInfo.port()).sync();
                 final var channel = sync.channel();
                 SESSION_HOLDER.addPeer(clientInfo.address(), clientInfo.port(), channel);
-                Message message = new Message(ClientUtil.getMac() + ":" + App.PEER_SERVER_PORT, InetAddress.getLocalHost().toString());
-                channel.writeAndFlush(message);
-                channel.flush();
+                final var folderHierarchy = FileUtil.getFolderHierarchy();
+                log.debug("******** Peer Sending file hierarchy {}", folderHierarchy);
+                folderHierarchy.forEach(folders -> channel.writeAndFlush(new CreateFolderCommand(UUID.randomUUID(), folders)));
+
+//                final var allFiles = FileUtil.getAllFiles();
+//                allFiles.forEach(channel::writeAndFlush);
+//                channel.writeAndFlush(message);
             } catch (InterruptedException e) {
                 log.error("Error connecting to peer serve", e);
                 CLIENT_INFO_LIST.remove(clientInfo);
                 Thread.currentThread().interrupt();
-            } catch (UnknownHostException e) {
-                throw new RuntimeException(e);
+//            } catch (UnknownHostException e) {
+//                throw new RuntimeException(e);
             }
         }
     }

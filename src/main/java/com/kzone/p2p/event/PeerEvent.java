@@ -4,6 +4,6 @@ import java.io.Serializable;
 
 public interface PeerEvent extends Serializable {
 
-    String peerHost() ;
+    String peerHost();
 
 }

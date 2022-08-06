@@ -1,6 +1,7 @@
 package com.kzone.message;
 
 import com.kzone.p2p.event.Message;
+import com.kzone.p2p.event.PeerEvent;
 import lombok.extern.log4j.Log4j2;
 
 import java.util.Queue;
@@ -12,12 +13,12 @@ import java.util.concurrent.locks.ReentrantLock;
 @Log4j2
 public class MessageHolder {
 
-    public static final Queue<Message> MESSAGES = new ConcurrentLinkedQueue<>();
+    public static final Queue<Object> MESSAGES = new ConcurrentLinkedQueue<>();
     private final Lock lock = new ReentrantLock();
     private final Condition isEmpty = lock.newCondition();
     private final Condition hasElement = lock.newCondition();
 
-    public void putMessage(Message clientEvent) {
+    public void putMessage(Object clientEvent) {
         try {
             lock.lock();
             MESSAGES.add(clientEvent);
@@ -27,7 +28,7 @@ public class MessageHolder {
         }
     }
 
-    public Message readMessage() {
+    public Object readMessage() {
         try {
             lock.lock();
             while (MESSAGES.isEmpty()) {

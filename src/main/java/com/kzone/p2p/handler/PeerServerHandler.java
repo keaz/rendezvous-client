@@ -1,27 +1,30 @@
-package com.kzone.p2p;
+package com.kzone.p2p.handler;
 
-import com.kzone.App;
-import com.kzone.p2p.event.Message;
-import com.kzone.p2p.event.PeerEvent;
+import com.kzone.file.FileMetadataMaintainer;
+import com.kzone.file.FileUtil;
+import com.kzone.file.FolderService;
+import com.kzone.p2p.PeersSessionHolder;
+import com.kzone.p2p.command.CreateFolderCommand;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.SimpleChannelInboundHandler;
 import lombok.extern.log4j.Log4j2;
 
 import java.net.InetSocketAddress;
-import java.net.SocketAddress;
-import java.security.Permission;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Queue;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 @Log4j2
 @ChannelHandler.Sharable
-public class PeerServerHandler extends SimpleChannelInboundHandler<PeerEvent> {
-//    static final List<Channel> channels = new Con<>();
+public class PeerServerHandler extends PeerHandler {
+
     static final Queue<Channel> channels = new ConcurrentLinkedQueue<>();
+
+
+    public PeerServerHandler(FolderService folderService, FileMetadataMaintainer mtdMaintainer) {
+        super(folderService, mtdMaintainer);
+    }
 
     @Override
     public void channelActive(final ChannelHandlerContext ctx) {
@@ -33,19 +36,14 @@ public class PeerServerHandler extends SimpleChannelInboundHandler<PeerEvent> {
             channel.close();
             return;
         }
-        PeersSessionHolder.getPeersSessionHolder().addPeer(socketAddress.getAddress().getHostAddress(), socketAddress.getPort(),channel);
+        PeersSessionHolder.getPeersSessionHolder().addPeer(socketAddress.getAddress().getHostAddress(), socketAddress.getPort(), channel);
+
+        final var folderHierarchy = FileUtil.getFolderHierarchy();
+        folderHierarchy.forEach(folders -> {
+            channel.writeAndFlush(new CreateFolderCommand(UUID.randomUUID(), folders));
+        });
+
         channels.add(channel);
-    }
-
-    @Override
-    public void channelRead0(ChannelHandlerContext ctx, PeerEvent msg) throws Exception {
-        log.info("Message received from peer: {}", msg);
-
-//        for (var c : channels) {
-//            if(msg instanceof Message peerMessage) {
-//                c.writeAndFlush(new Message(peerMessage.clientId(),peerMessage.message()+" Server UUID :"+ App.uuid));
-//            }
-//        }
     }
 
     @Override
@@ -58,7 +56,7 @@ public class PeerServerHandler extends SimpleChannelInboundHandler<PeerEvent> {
     @Override
     public void channelUnregistered(ChannelHandlerContext ctx) throws Exception {
         log.info("Closing connection for peer - {}", ctx);
-        final var socketAddress =(InetSocketAddress) ctx.channel().remoteAddress();
+        final var socketAddress = (InetSocketAddress) ctx.channel().remoteAddress();
 
         PeersSessionHolder.getPeersSessionHolder().removePeer(socketAddress.getAddress().getHostAddress(), socketAddress.getPort());
         super.channelUnregistered(ctx);
