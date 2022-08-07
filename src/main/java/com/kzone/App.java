@@ -1,7 +1,6 @@
 package com.kzone;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.jsontype.DefaultBaseTypeLimitingValidator;
 import com.kzone.client.ClientConnector;
 import com.kzone.file.FileMetadataMaintainer;
 import com.kzone.file.FileUtil;
@@ -10,10 +9,7 @@ import com.kzone.file.WatchDir;
 import com.kzone.handler.ClientHandler;
 import com.kzone.message.MessageHolder;
 import com.kzone.message.Sender;
-import com.kzone.p2p.JsonDecoder;
-import com.kzone.p2p.JsonEncoder;
-import com.kzone.p2p.PeerClient;
-import com.kzone.p2p.PeerServer;
+import com.kzone.p2p.*;
 import com.kzone.p2p.handler.PeerClientHandler;
 import com.kzone.p2p.handler.PeerServerHandler;
 import io.netty.bootstrap.Bootstrap;
@@ -25,10 +21,8 @@ import java.io.IOException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.nio.file.FileSystems;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.UUID;
 
 /**
  * Hello world!
@@ -44,21 +38,17 @@ public class App {
     public static final MessageHolder MESSAGE_HOLDER = new MessageHolder();
     static final String HOST = System.getenv("SERVER_HOST") == null ? "host.docker.internal" : System.getenv("SERVER_HOST");
     static final int PORT = 8007;
-    private static final ObjectMapper objectMapper;
-
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    public static final JsonDecoder JSON_DECODER = new JsonDecoder(OBJECT_MAPPER);
+    public static final JsonEncoder JSON_ENCODER = new JsonEncoder(OBJECT_MAPPER);
 
     static {
         try {
             HOST_NAME = InetAddress.getLocalHost().toString();
-            objectMapper = new ObjectMapper();
-            objectMapper.activateDefaultTyping(new DefaultBaseTypeLimitingValidator());
         } catch (UnknownHostException e) {
             throw new RuntimeException(e);
         }
     }
-
-    public static final JsonDecoder JSON_DECODER = new JsonDecoder(objectMapper);
-    public static final JsonEncoder JSON_ENCODER = new JsonEncoder(objectMapper);
 
     public static void main(String[] args) throws IOException {
 
@@ -73,10 +63,10 @@ public class App {
         final var fileMetadata = FileUtil.getFileMetadata();
         metadataMaintainer.saveFileMetadata(fileMetadata);
 
-        final var peerClient = new PeerClient(new Bootstrap(), new NioEventLoopGroup(), JSON_DECODER, JSON_ENCODER, new PeerClientHandler(folderService,metadataMaintainer));
+        final var peerClient = new PeerClient(new Bootstrap(), new NioEventLoopGroup(), JSON_DECODER, JSON_ENCODER, new PeerClientHandler(folderService, metadataMaintainer));
         peerClient.init();
-        new Thread(new PeerServer(PEER_SERVER_PORT, JSON_DECODER, JSON_ENCODER, new PeerServerHandler(folderService,metadataMaintainer))).start();
-        new Thread(new WatchDir(DIRECTORY, FileSystems.getDefault().newWatchService(),metadataMaintainer)).start();
+        new Thread(new PeerServer(PEER_SERVER_PORT, JSON_DECODER, JSON_ENCODER, new PeerServerHandler(folderService, metadataMaintainer))).start();
+        new Thread(new WatchDir(DIRECTORY, FileSystems.getDefault().newWatchService(), metadataMaintainer)).start();
         log.info("Connecting to server {}", HOST);
         new Thread(new ClientConnector(HOST, PORT, new ClientHandler(peerClient))).start();
         new Thread(new Sender(MESSAGE_HOLDER)).start();

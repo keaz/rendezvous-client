@@ -13,6 +13,8 @@ import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
 import io.netty.handler.codec.LengthFieldPrepender;
+import io.netty.handler.logging.LogLevel;
+import io.netty.handler.logging.LoggingHandler;
 import lombok.extern.log4j.Log4j2;
 
 import java.nio.file.Paths;
@@ -37,7 +39,7 @@ public record PeerClient(Bootstrap bootstrap, NioEventLoopGroup group, ChannelIn
             @Override
             public void initChannel(SocketChannel ch) throws Exception {
                 ChannelPipeline pipeline = ch.pipeline();
-//                            pipeline.addLast(new LoggingHandler(LogLevel.INFO));
+                            pipeline.addLast(new LoggingHandler(LogLevel.DEBUG));
                 pipeline.addLast("frameDecoder",
                         new LengthFieldBasedFrameDecoder(1048576, 0, 4, 0, 4));
                 pipeline.addLast(decoder);
