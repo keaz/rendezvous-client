@@ -1,7 +1,5 @@
 package com.kzone.message;
 
-import com.kzone.p2p.event.Message;
-import com.kzone.p2p.event.PeerEvent;
 import lombok.extern.log4j.Log4j2;
 
 import java.util.Queue;

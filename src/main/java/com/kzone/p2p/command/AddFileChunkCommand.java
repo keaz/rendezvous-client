@@ -9,7 +9,7 @@ import java.util.UUID;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonTypeInfo(use = JsonTypeInfo.Id.CLASS, property = "@type")
-public record AddFileChunkCommand(UUID id, String fileName, byte[] data, int start) implements Serializable {
+public record AddFileChunkCommand(UUID id, String fileName, byte[] data, int start) implements Command {
 
     @Override
     public boolean equals(Object o) {

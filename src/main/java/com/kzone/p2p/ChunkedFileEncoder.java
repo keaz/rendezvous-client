@@ -55,7 +55,7 @@ public class ChunkedFileEncoder extends MessageToMessageEncoder<ChunkedFile> {
         }
 
         if(msg.isEndOfInput()){
-            ctx.writeAndFlush(new FileUploadCompletedEvent(UUID.randomUUID(),msg.path(), FileUtil.getFileChecksum(new File(msg.path()))));
+            ctx.writeAndFlush(new FileUploadCompletedEvent(UUID.randomUUID(),msg.path(), FileUtil.getFileChecksum(new File(msg.path()).getAbsoluteFile())));
         }
 
     }

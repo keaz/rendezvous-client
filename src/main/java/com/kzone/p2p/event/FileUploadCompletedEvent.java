@@ -8,5 +8,5 @@ import java.util.UUID;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonTypeInfo(use = JsonTypeInfo.Id.CLASS, property = "@type")
-public record FileUploadCompletedEvent(UUID id, String fileName, String checkSum) implements Serializable {
+public record FileUploadCompletedEvent(UUID id, String fileName, String checkSum) implements Event {
 }

@@ -41,44 +41,84 @@ public class WatchDir implements Runnable {
         this.keys = new HashMap<>();
 
         log.info("Scanning {}", root);
-        registerAll(root);
+        registerAll(root, false);
 
         // enable trace after initial registration
         this.trace = true;
     }
 
+    private static void sendCreateFolder(String rootRelativePath) {
+        App.MESSAGE_HOLDER.putMessage(new CreateFolderCommand(UUID.randomUUID(), Collections.singletonList(new Folder(rootRelativePath))));
+    }
+
     /**
      * Register the given directory with the WatchService
      */
-    private void register(Path dir) throws IOException {
-        var key = dir.register(watcher, ENTRY_CREATE, ENTRY_DELETE, ENTRY_MODIFY);
-        if (trace) {
-            var prev = keys.get(key);
-            if (prev == null) {
-                log.info("register: {}", dir);
-            } else {
-                if (!dir.equals(prev)) {
-                    log.info("update: {} -> {}", prev, dir);
+    private void register(Path dir) {
+        try {
+            var key = dir.register(watcher, ENTRY_CREATE, ENTRY_DELETE, ENTRY_MODIFY);
+            if (trace) {
+                var prev = keys.get(key);
+                if (prev == null) {
+                    log.debug("register: {}", dir);
+                } else {
+                    if (!dir.equals(prev)) {
+                        log.debug("update: {} -> {}", prev, dir);
+                    }
                 }
             }
+            keys.put(key, dir);
+        } catch (IOException exception) {
+            log.error("Failed to register watch {}", dir);
         }
-        keys.put(key, dir);
     }
 
     /**
      * Register the given directory, and all its subdirectories, with the
      * WatchService.
      */
-    private void registerAll(final Path start) throws IOException {
+    private void registerAll(final Path start, boolean isNew) throws IOException {
         // register directory and subdirectories
         Files.walkFileTree(start, new SimpleFileVisitor<>() {
             @Override
             public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs)
                     throws IOException {
                 register(dir);
+                if (isNew && Files.isDirectory(dir, NOFOLLOW_LINKS)) {
+
+                    var child = start.resolve(dir);
+                    final String rootRelativePath = getRootRelativePath(child);
+                    sendCreateFolder(rootRelativePath);
+                    sendReadyToUploadCommand(start, child);
+                    createMetadata(child,rootRelativePath);
+
+                }
                 return FileVisitResult.CONTINUE;
             }
         });
+    }
+
+    private void sendReadyToUploadCommand(Path dir, Path child) {
+        try (var stream = Files.list(child)) {
+            stream.filter(path -> !Files.isDirectory(path)).forEach(path -> {
+                final var resolved = child.resolve(path);
+                sendUploadCommand(path, root.relativize(root.resolve(resolved)).toString());
+            });
+        } catch (IOException exception) {
+            log.error("Failed to get list of files {}", dir);
+        }
+    }
+
+    private String getRootRelativePath(Path child) {
+        var rootRelative = root.relativize(root.resolve(child));
+        return rootRelative.toString();
+    }
+
+    private void createMetadata(Path path,String rootRelativePath) {
+        final var folderHierarchy = Collections.singletonList(Collections.singletonList(new Folder(rootRelativePath)));
+        folderHierarchy.forEach(fileMetadataMaintainer::createMetadataDirectoryPath);
+        final var fileMetadata = FileUtil.getFileMetadata(path);
+        fileMetadataMaintainer.saveFileMetadata(fileMetadata);
     }
 
     /**
@@ -125,8 +165,9 @@ public class WatchDir implements Runnable {
 
                     try {
                         if (Files.isDirectory(child, NOFOLLOW_LINKS)) {
-                            App.MESSAGE_HOLDER.putMessage(new CreateFolderCommand(UUID.randomUUID(), Collections.singletonList(new Folder(rootRelativePath))));
-                            registerAll(child);
+                            registerAll(child, true);
+//                            sendCreateFolder(rootRelativePath);
+                            createMetadata(child,rootRelativePath);
                         } else {
                             sendUploadCommand(child, rootRelativePath);
                         }
@@ -163,10 +204,10 @@ public class WatchDir implements Runnable {
     }
 
     private void sendUploadCommand(Path path, String rootRelativePath) {
-        if(fileMetadataMaintainer.isUpdating(rootRelativePath)){
+        if (fileMetadataMaintainer.isUpdating(rootRelativePath)) {
             return;
         }
-        var checksum = FileUtil.getFileChecksum(path.toAbsolutePath().toFile());
+       var checksum = FileUtil.getFileChecksum(path.toAbsolutePath().toFile());
         try {
             if (fileMetadataMaintainer.isModified(rootRelativePath, checksum)) {
                 var size = Files.size(path);
