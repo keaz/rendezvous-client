@@ -98,7 +98,7 @@ public class FileUtil {
                     log.debug("Visiting directory {}", dir);
                     if (!Files.isDirectory(dir) && !Files.isSymbolicLink(dir)) {
                         final Path relativize = getRelativize(App.DIRECTORY, dir);
-                        commands.add(new ReadyToUploadCommand(UUID.randomUUID(),relativize.toString(),Files.size(relativize),FileUtil.getFileChecksum(dir.toFile())));
+                        commands.add(new ReadyToUploadCommand(UUID.randomUUID(),relativize.toString(),Files.size(relativize),FileUtil.getFileChecksum(dir.toFile().getAbsoluteFile())));
                     }
                     return FileVisitResult.CONTINUE;
                 }
@@ -193,7 +193,7 @@ public class FileUtil {
     private static Map<String, FileMetadata> getMetadataMap(Path dir, Stream<Path> stream) {
         return stream.filter(Files::isRegularFile).map(path -> {
             final var relativize = dir.relativize(path);
-            return new FileMetadata(relativize.toString(),new Metadata(FileUtil.getFileChecksum(path.toFile()),false));
+            return new FileMetadata(relativize.toString(),new Metadata(FileUtil.getFileChecksum(path.toFile().getAbsoluteFile()),false));
         }).collect(Collectors.toMap(FileMetadata::fileName, Function.identity()));
     }
 

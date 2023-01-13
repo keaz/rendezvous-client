@@ -10,6 +10,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.List;
+import java.util.Map;
 
 @RequiredArgsConstructor
 @Log4j2
@@ -22,42 +23,51 @@ public class FileMetadataMaintainer {
 
 
     public void createMetadataDirectoryPath(List<Folder> folders) {
-        folders.forEach(folder -> {
-            try {
-                final var resolve = metaDataDirectory.resolve(folder.folderName());
-                if (Files.exists(resolve)) {
-                    return;
-                }
-                Files.createDirectories(metaDataDirectory.resolve(folder.folderName()));
-            } catch (IOException e) {
-                throw new RuntimeException(e);
+        folders.forEach(this::create);
+    }
+
+    private void create(Folder folder) {
+        try {
+            final var resolve = metaDataDirectory.resolve(folder.folderName());
+            if (Files.exists(resolve)) {
+                return;
             }
-        });
+            Files.createDirectories(metaDataDirectory.resolve(folder.folderName()));
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     public void saveFileMetadata(List<FolderMetadata> folderMetadata) {
-        folderMetadata.forEach(metadata -> {
-            final var path = Paths.get(metaDataDirectory.toAbsolutePath().toString(), metadata.filePath());
-            try {
-                if (!Files.exists(path)) {
-                    Files.createFile(path);
-                }
+        folderMetadata.forEach(this::updateMetadata);
+    }
 
-                mapper.writeValue(Paths.get(path.toString(), MTD_JSON).toFile(), metadata);
+    private void updateMetadata(FolderMetadata metadata) {
+        final var path = Paths.get(metaDataDirectory.toAbsolutePath().toString(), metadata.filePath());
 
-            } catch (IOException e) {
-                throw new RuntimeException(e);
+        try {
+            Files.createDirectories(path);
+            if (!Files.exists(path)) {
+                Files.createFile(path);
             }
-        });
+
+            mapper.writeValue(Paths.get(path.toString(), MTD_JSON).toFile(), metadata);
+
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     public boolean isModified(String path, String checkSum) {
         final var resolve = metaDataDirectory.resolve(path);
         final var parent = resolve.getParent();
         final var fileName = parent.relativize(resolve).toString();
-        final var file = parent.resolve(MTD_JSON).toFile();
+        final var file = parent.resolve(MTD_JSON);
+        if (!Files.exists(file)) {
+            return true;
+        }
         try {
-            final var folderMetadata = mapper.readValue(file, FolderMetadata.class);
+            final var folderMetadata = mapper.readValue(file.toFile(), FolderMetadata.class);
             final var fileMetadataMap = folderMetadata.metaData();
             if (!fileMetadataMap.containsKey(fileName)) {
                 return true;
@@ -79,6 +89,15 @@ public class FileMetadataMaintainer {
         final var mtdJsonPath = parent.resolve(MTD_JSON);
         final var file = mtdJsonPath.toFile();
         try {
+
+            Files.createDirectories(parent);
+            if (!Files.exists(mtdJsonPath)) {
+                var metaData = Map.of(fileName, new FileMetadata(fileName, new Metadata(newCheckSum, false)));
+                mapper.writeValue(mtdJsonPath.toFile(), new FolderMetadata(fileName, metaData));
+
+                return;
+            }
+
             final var folderMetadata = mapper.readValue(file, FolderMetadata.class);
             final var fileMetadataMap = folderMetadata.metaData();
             final var fileMetadata = new FileMetadata(fileName, new Metadata(newCheckSum, false));
@@ -116,12 +135,15 @@ public class FileMetadataMaintainer {
         final var parent = resolve.getParent();
         final var fileName = parent.relativize(resolve).toString();
         final var mtdJsonPath = parent.resolve(MTD_JSON);
+        if (!Files.exists(mtdJsonPath)) {
+            return false;
+        }
         final var file = mtdJsonPath.toFile();
         try {
             final var folderMetadata = mapper.readValue(file, FolderMetadata.class);
             final var fileMetadataMap = folderMetadata.metaData();
             final var oldMetadata = fileMetadataMap.get(fileName);
-            if(oldMetadata == null){
+            if (oldMetadata == null) {
                 return false;
             }
             return oldMetadata.metaData().idUpdating();

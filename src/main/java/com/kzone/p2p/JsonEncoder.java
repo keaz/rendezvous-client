@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.zip.GZIPOutputStream;
@@ -20,18 +21,23 @@ public class JsonEncoder extends MessageToMessageEncoder<Object> {
 
     private final ObjectMapper objectMapper;
 
-    @Override
-    protected void encode(ChannelHandlerContext ctx, Object msg, List<Object> out) throws Exception {
-        final var messageString = objectMapper.writeValueAsString(msg);
+    private static byte[] gZipMessage(String messageString) throws IOException {
 
-        byte[] messageBytes;
         try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
             try (GZIPOutputStream gzip = new GZIPOutputStream(outputStream)) {
                 gzip.write(messageString.getBytes(StandardCharsets.UTF_8));
             }
-            messageBytes = outputStream.toByteArray();
-
+            return outputStream.toByteArray();
         }
+
+    }
+
+    @Override
+    protected void encode(ChannelHandlerContext ctx, Object msg, List<Object> out) throws Exception {
+
+        final var messageString = objectMapper.writeValueAsString(msg);
+
+        byte[] messageBytes = gZipMessage(messageString);
         out.add(Unpooled.wrappedBuffer(messageBytes));
 
     }

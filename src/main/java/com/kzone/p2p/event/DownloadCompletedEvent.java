@@ -7,5 +7,5 @@ import java.util.UUID;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonTypeInfo(use = JsonTypeInfo.Id.CLASS, property = "@type")
-public record DownloadCompletedEvent(UUID uuid, String fileName){
+public record DownloadCompletedEvent(UUID uuid, String fileName) implements Event{
 }

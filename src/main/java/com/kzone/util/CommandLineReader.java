@@ -17,7 +17,7 @@ public record CommandLineReader(MessageHolder messageHolder) implements Runnable
         BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
         final var folders = new ArrayList<Folder>();
         final var uuid = UUID.randomUUID();
-//        folders.add(new Folder(uuid.toString(), "asd",Collections.emptyList()));
+//        folders.add(new Folder(id.toString(), "asd",Collections.emptyList()));
 //        final var modifyFolderCommand = new ModifyFolderCommand(ClientUtil.getClientName(), UUID.randomUUID(), folders);
 //        messageHolder.putMessage(modifyFolderCommand);
         try {
