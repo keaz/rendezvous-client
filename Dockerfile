@@ -20,7 +20,7 @@ RUN --mount=type=cache,target=/root/.m2 \
 # ------------------------------------------------------------------------------
 # RUNTIME STAGE (deployment)
 # ------------------------------------------------------------------------------
-FROM openjdk:17.0.2-slim-buster
+FROM openjdk:22-slim-buster
 
 
 ENV app_name="rendezvous-client-jar-with-dependencies"
